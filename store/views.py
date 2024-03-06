@@ -2,8 +2,19 @@ from django.shortcuts import render,redirect
 from django.views.generic import View,TemplateView
 from store.forms import RegistrationForms,LoginForm
 from django.contrib.auth import authenticate,login,logout
-from store.models import Product
+from store.models import Product,BasketItem,Size,Order,OrderItems
 from django.contrib import messages
+
+
+def signin_required(fn):
+     def wrapper(request,*args,**kwargs):
+          if not request.user.is_authenticated:
+               messages.error(request,"invalid session")
+               return redirect("signin")
+          else:
+               return fn(request,*args,**kwargs)
+     return wrapper
+
 
 
 #url:localhost:8000/register/
@@ -59,6 +70,111 @@ class ProductDetailView(View):
    
 class HomeView(TemplateView):
    template_name="base.html"
+
+
+class AddToBasketView(View):
+   def post(self,request,*args,**kwargs):
+      size=request.POST.get("size")
+      size_obj=Size.objects.get(name=size)
+      qty=request.POST.get("qty")
+      id=kwargs.get("pk")
+      product_obj=Product.objects.get(id=id)
+      BasketItem.objects.create(
+         size_object=size_obj,
+         qty=qty,
+         product_object=product_obj,
+         basket_object=request.user.cart
+           )
+      return redirect("index")
+   
+class BasketItemListView(View):
+    def get(self,request,*args,**kwargs):
+       qs=request.user.cart.cartitem.filter(is_order_placed=False)
+       return render(request,"cart_list.html",{"data":qs})
+    
+class BasketItemRemoveView(View):
+   def get(self,request,*args,**kwargs):
+      id=kwargs.get("pk")
+      basket_item_object=BasketItem.objects.get(id=id)
+      basket_item_object.delete()
+      return redirect("basket-list")
+   
+class CartItemUpdateQuantityView(View):
+   def post(self,request,*args,**kwargs):
+      action=request.POST.get("counterbutton")
+      print(action)
+      id=kwargs.get("pk")
+      basket_item_object=BasketItem.objects.get(id=id)
+      if action=="+":
+         basket_item_object.qty+=1
+         basket_item_object.save()
+      else:
+         basket_item_object.qty-=1
+         basket_item_object.save()
+
+
+
+     # action_qty=request.POST.get("qty")
+      #print(action_qty)
+      return redirect("basket-list")
+   
+class CheckOutView(View):
+   def get(self,request,*args,**kwargs):
+      return render(request,"checkout.html")
+   
+   def post(self,request,*args,**kwargs):
+      email=request.POST.get("email")
+      phone=request.POST.get("phone")
+      address=request.POST.get("address")
+      order_obj=Order.objects.create(
+         user_object=request.user,
+         delivery_address=address,
+         phone=phone,
+         email=email,
+         total=request.user.cart.basket_total
+      )
+      #creating orderitem instance
+      try:
+        basket_items=request.user.cart.cart_item
+        for bi in basket_items:
+         OrderItems.objects.create(
+            order_object=order_obj,
+            basket_item_object=bi
+
+         )
+         bi.is_order_placed=True
+         bi.save()
+      except:
+       order_obj.delete()
+      
+      finally:
+       return redirect("index")
+      #return render(request,'ordersummery.html')
+   
+#class CheckOutSummaryView(View):
+ #     def get(self,request,*args,**kwargs):
+
+
+
+
+
+
+      
+
+
+   
+   
+
+
+   
+
+
+      
+
+
+
+
+
 
 
    
